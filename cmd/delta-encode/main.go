@@ -31,6 +31,7 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	generate := flags.Int("generate", 10000, "生成多少个递增整数")
 	raw := flags.String("values", "", "逗号分隔的整数序列（可含递减）")
 	roundtrip := flags.Bool("roundtrip", false, "编码后再解码并比对")
+	at := flags.Int64("at", -1, "随机访问下标（0 起），只解码所在组")
 	if err := flags.Parse(args); err != nil {
 		return 2
 	}
@@ -72,6 +73,14 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		if !same {
 			return 1
 		}
+	}
+	if *at >= 0 {
+		value, err := deltaencode.At(encoded, uint64(*at))
+		if err != nil {
+			fmt.Fprintln(stderr, err)
+			return 1
+		}
+		fmt.Fprintf(stdout, "at[%d]=%d\n", *at, value)
 	}
 	return 0
 }
