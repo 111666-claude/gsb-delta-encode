@@ -1,4 +1,4 @@
-// Command delta-encode 演示差分编码。
+// Command delta-encode 演示分帧差分编码。
 package main
 
 import (
@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"strings"
 
 	"example.com/deltaencode"
@@ -31,6 +32,7 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	generate := flags.Int("generate", 10000, "生成多少个递增整数")
 	raw := flags.String("values", "", "逗号分隔的整数序列（可含递减）")
 	roundtrip := flags.Bool("roundtrip", false, "编码后再解码并比对")
+	at := flags.Int64("at", -1, "随机访问第 N 项（0 起下标），只解它所在的一组")
 	if err := flags.Parse(args); err != nil {
 		return 2
 	}
@@ -41,9 +43,9 @@ func Run(args []string, stdout, stderr io.Writer) int {
 			if field == "" {
 				continue
 			}
-			var value int64
-			if _, err := fmt.Sscan(field, &value); err != nil {
-				fmt.Fprintln(stderr, "不是整数")
+			value, err := strconv.ParseInt(field, 10, 64)
+			if err != nil {
+				fmt.Fprintf(stderr, "不是整数：%q\n", field)
 				return 2
 			}
 			data = append(data, value)
@@ -52,7 +54,11 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		data = values(*generate)
 	}
 	encoded := deltaencode.Encode(data)
-	fmt.Fprintf(stdout, "count=%d bytes=%d bytes_per_item=%.2f\n", len(data), len(encoded), float64(len(encoded))/float64(len(data)))
+	bytesPerItem := 0.0
+	if len(data) > 0 {
+		bytesPerItem = float64(len(encoded)) / float64(len(data))
+	}
+	fmt.Fprintf(stdout, "count=%d bytes=%d bytes_per_item=%.2f\n", len(data), len(encoded), bytesPerItem)
 	if *roundtrip {
 		decoded, err := deltaencode.Decode(encoded)
 		if err != nil {
@@ -72,6 +78,14 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		if !same {
 			return 1
 		}
+	}
+	if *at >= 0 {
+		value, err := deltaencode.LookupAt(encoded, *at)
+		if err != nil {
+			fmt.Fprintln(stderr, err)
+			return 1
+		}
+		fmt.Fprintf(stdout, "at=%d value=%d\n", *at, value)
 	}
 	return 0
 }
